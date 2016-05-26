@@ -27,5 +27,9 @@
 *
 **/
 
+
+ALTER TABLE cc_card ADD COLUMN `announce_exchange` decimal(12,5) DEFAULT '0' AFTER credit;
+INSERT INTO cc_config (config_title,config_key,config_value,config_description,config_valuetype,config_listvalues,config_group_title) VALUES ('Card individual exchange rate','announce_exchange','0','Enable account individual exchange rates. This eliminate fluctuation of customer balances on exchange rate update.',1,'yes,no','global');
+
 -- Update Version
 UPDATE cc_version SET version = '2.2.0';
