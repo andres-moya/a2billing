@@ -334,12 +334,22 @@ echo Display_Login_Button ($DBHandle, $id);
                </tr>
                <tr height="20px">
                     <td  class="form_head">
-                        <?php echo gettext("BALANCE") ?> :
+                        <?php echo gettext("BALANCE").' ('.$A2B->config['global']['base_currency'].')'?> :
                     </td>
                     <td class="tableBodyRight"  background="../Public/templates/default/images/background_cells.gif" width="70%">
                         &nbsp;<?php echo $card['credit']?>
                     </td>
+               </tr>
+               <?php if ($A2B->config['global']['announce_exchange'] && $card['announce_exchange'] > 0 ) {?>
+               <tr height="20px">
+                    <td  class="form_head">
+                        <?php echo gettext("BALANCE").' ('.$card['currency'].')'?> :
+                    </td>
+                    <td class="tableBodyRight"  background="../Public/templates/default/images/background_cells.gif" width="70%">
+                        &nbsp;<?php echo number_format($card['credit']/$card['announce_exchange'],2,'.','')?>
+                    </td>
                 </tr>
+                <?php } ?>
                 <tr height="20px">
                     <td  class="form_head">
                         <?php echo gettext("CURRENCY") ?>

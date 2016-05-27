@@ -146,6 +146,7 @@ class A2Billing
     public $early_destination='';
     public $sip_iax_buddy;
     public $credit;
+    public $announce_exchange=0;
     public $tariff;
     public $active;
     public $status;
@@ -2049,17 +2050,25 @@ class A2Billing
     {
         global $currencies_list;
 
-        if (isset($this->agiconfig['agi_force_currency']) && strlen($this->agiconfig['agi_force_currency']) == 3) {
-            $this->currency = $this->agiconfig['agi_force_currency'];
-        }
-
-        $this->debug(DEBUG, $agi, __FILE__, __LINE__, "[CURRENCY : $this->currency]");
-        if (!isset($currencies_list[strtoupper($this->currency)][2]) || !is_numeric($currencies_list[strtoupper($this->currency)][2])) {
-            $mycur = 1;
+        // announce exchange feature suppress announced balance fluctuation during exchange rate variation
+        // if announce exchange enabled and exchange rate set for this 'card' (is positive to avoid div by 0) 
+        // we use personal exchange rate that should be updated	on refill, or currecny change	
+        if ( $this->config['global']['announce_exchange'] && $this->announce_exchange > 0 ) {
+            $mycur=$this->announce_exchange;
         } else {
-            $mycur = $currencies_list[strtoupper($this->currency)][2];
-        }
+		
+            if (isset($this->agiconfig['agi_force_currency']) && strlen($this->agiconfig['agi_force_currency']) == 3 ) {
+                $this->currency = $this->agiconfig['agi_force_currency'];
+            }
 
+            $this->debug(DEBUG, $agi, __FILE__, __LINE__, "[CURRENCY : $this->currency]");
+            if (!isset($currencies_list[strtoupper($this->currency)][2]) || !is_numeric($currencies_list[strtoupper($this->currency)][2])) {
+                $mycur = 1;
+            } else {
+                $mycur = $currencies_list[strtoupper($this->currency)][2];
+            }
+        }
+		file_put_contents('/tmp/a.log', "announce_exchange ".$this->announce_exchange." mycur $mycur\n", FILE_APPEND | LOCK_EX);
         $credit_cur = $credit / $mycur;
         list($units, $cents) = preg_split('/[.]/', sprintf('%01.2f', $credit_cur));
 
@@ -2199,13 +2208,21 @@ class A2Billing
     {
         global $currencies_list;
 
-        if (isset($this->agiconfig['agi_force_currency']) && strlen($this->agiconfig['agi_force_currency']) == 3) {
-            $this->currency = $this->agiconfig['agi_force_currency'];
+        // announce exchange feature suppress announced balance fluctuation during exchange rate variation
+        // if announce exchange enabled and exchange rate set for this 'card' (is positive to avoid div by 0) 
+        // we use personal exchange rate that should be updated	on refill, or currecny change	
+        if ( $this->config['global']['announce_exchange'] && $this->announce_exchange > 0 ) {
+            $mycur=$this->announce_exchange;
+        } else {
+            if (isset($this->agiconfig['agi_force_currency']) && strlen($this->agiconfig['agi_force_currency']) == 3) {
+                $this->currency = $this->agiconfig['agi_force_currency'];
+            }
+
+            $this->debug(DEBUG, $agi, __FILE__, __LINE__, "[CURRENCY : $this->currency]");
+            if (!isset($currencies_list[strtoupper($this->currency)][2]) || !is_numeric($currencies_list[strtoupper($this->currency)][2])) $mycur = 1;
+            else $mycur = $currencies_list[strtoupper($this->currency)][2];
         }
 
-        $this->debug(DEBUG, $agi, __FILE__, __LINE__, "[CURRENCY : $this->currency]");
-        if (!isset($currencies_list[strtoupper($this->currency)][2]) || !is_numeric($currencies_list[strtoupper($this->currency)][2])) $mycur = 1;
-        else $mycur = $currencies_list[strtoupper($this->currency)][2];
         $credit_cur = $rate / $mycur;
 
         list($units, $cents) = preg_split('/[.]/', $credit_cur);
@@ -2697,7 +2714,7 @@ class A2Billing
                     " cc_card.language, cc_card.username, removeinterprefix, cc_card.redial, enableexpire, UNIX_TIMESTAMP(expirationdate), " .
                     " expiredays, nbused, UNIX_TIMESTAMP(firstusedate), UNIX_TIMESTAMP(cc_card.creationdate), cc_card.currency, " .
                     " cc_card.lastname, cc_card.firstname, cc_card.email, cc_card.uipass, cc_card.id_campaign, cc_card.id, useralias, " .
-                    " cc_card.status, cc_card.voicemail_permitted, cc_card.voicemail_activated, cc_card.restriction, cc_country.countryprefix" .
+                    " cc_card.status, cc_card.voicemail_permitted, cc_card.voicemail_activated, cc_card.restriction, cc_country.countryprefix, announce_exchange " .
                     " FROM cc_callerid " .
                     " LEFT JOIN cc_card ON cc_callerid.id_cc_card = cc_card.id " .
                     " LEFT JOIN cc_tariffgroup ON cc_card.tariff = cc_tariffgroup.id " .
@@ -2822,6 +2839,7 @@ class A2Billing
                 $this->voicemail            = ($result[0][29] && $result[0][30]) ? 1 : 0;
                 $this->restriction          = $result[0][31];
                 $this->countryprefix        = $result[0][32];
+                $this->announce_exchange    = $result[0][33];
 
                 if (strlen($language) == 2 && !($this->languageselected >= 1)) {
                     if ($this->agiconfig['asterisk_version'] == "1_2") {
@@ -2933,7 +2951,7 @@ class A2Billing
                         " UNIX_TIMESTAMP(expirationdate), expiredays, nbused, UNIX_TIMESTAMP(firstusedate), " .
                         " UNIX_TIMESTAMP(cc_card.creationdate), cc_card.currency, cc_card.lastname, cc_card.firstname, cc_card.email, " .
                         " cc_card.uipass, cc_card.id_campaign, cc_card.id, useralias, status, voicemail_permitted, voicemail_activated, " .
-                        " cc_card.restriction, cc_country.countryprefix " .
+                        " cc_card.restriction, cc_country.countryprefix, announce_exchange " .
                         " FROM cc_card " .
                         " LEFT JOIN cc_tariffgroup ON tariff = cc_tariffgroup.id " .
                         " LEFT JOIN cc_country ON cc_card.country = cc_country.countrycode " .
@@ -2997,6 +3015,7 @@ class A2Billing
                     $this->voicemail            = ($result[0][25] && $result[0][26]) ? 1 : 0;
                     $this->restriction          = $result[0][27];
                     $this->countryprefix        = $result[0][28];
+                    $this->announce_exchange    = $result[0][29];
 
                     if ($this->typepaid == 1) {
                         $this->credit = $this->credit + $this->creditlimit;
@@ -3137,7 +3156,7 @@ class A2Billing
                     " enableexpire, UNIX_TIMESTAMP(expirationdate), expiredays, nbused, UNIX_TIMESTAMP(firstusedate), " .
                     " UNIX_TIMESTAMP(cc_card.creationdate), cc_card.currency, cc_card.lastname, cc_card.firstname, cc_card.email, " .
                     " cc_card.uipass, cc_card.id, cc_card.id_campaign, cc_card.id, useralias, status, voicemail_permitted, " .
-                    " voicemail_activated, cc_card.restriction, cc_country.countryprefix " .
+                    " voicemail_activated, cc_card.restriction, cc_country.countryprefix, announce_exchange " .
                     " FROM cc_card LEFT JOIN cc_tariffgroup ON tariff = cc_tariffgroup.id " .
                     " LEFT JOIN cc_country ON cc_card.country = cc_country.countrycode " .
                     " WHERE username = '" . $this->cardnumber . "'";
@@ -3201,6 +3220,7 @@ class A2Billing
                 $this->voicemail            = ($result[0][26] && $result[0][27]) ? 1 : 0;
                 $this->restriction          = $result[0][28];
                 $this->countryprefix        = $result[0][29];
+                $this->announce_exchange    = $result[0][30];
 
                 if ($this->typepaid == 1) {
                     $this->credit = $this->credit + $this->creditlimit;
@@ -3369,7 +3389,7 @@ class A2Billing
                         " enableexpire, UNIX_TIMESTAMP(expirationdate), expiredays, nbused, UNIX_TIMESTAMP(firstusedate), " .
                         " UNIX_TIMESTAMP(cc_card.creationdate), cc_card.currency, cc_card.lastname, cc_card.firstname, cc_card.email, " .
                         " cc_card.uipass, cc_card.id, cc_card.id_campaign, cc_card.id, useralias, status, voicemail_permitted, voicemail_activated, " .
-                        " cc_card.restriction, cc_country.countryprefix " .
+                        " cc_card.restriction, cc_country.countryprefix, announce_exchange " .
                         " FROM cc_card LEFT JOIN cc_tariffgroup ON tariff = cc_tariffgroup.id " .
                         " LEFT JOIN cc_country ON cc_card.country = cc_country.countrycode " .
                         " WHERE username = '" . $this->cardnumber . "'";
@@ -3412,6 +3432,7 @@ class A2Billing
             $this->voicemail            = ($result[0][26] && $result[0][27]) ? 1 : 0;
             $this->restriction          = $result[0][28];
             $this->countryprefix        = $result[0][29];
+            $this->announce_exchange    = $result[0][30];
 
             if ($this->typepaid == 1) $this->credit = $this->credit + $this->creditlimit;
 
@@ -3484,7 +3505,7 @@ class A2Billing
         $QUERY = "SELECT credit, tariff, activated, inuse, simultaccess, typepaid, creditlimit, language, removeinterprefix, redial, enableexpire, " .
                     " UNIX_TIMESTAMP(expirationdate), expiredays, nbused, UNIX_TIMESTAMP(firstusedate), UNIX_TIMESTAMP(cc_card.creationdate), " .
                     " cc_card.currency, cc_card.lastname, cc_card.firstname, cc_card.email, cc_card.uipass, cc_card.id_campaign, status, " .
-                    " voicemail_permitted, voicemail_activated, cc_card.restriction, cc_country.countryprefix " .
+                    " voicemail_permitted, voicemail_activated, cc_card.restriction, cc_country.countryprefix, announce_exchange " .
                     " FROM cc_card LEFT JOIN cc_tariffgroup ON tariff = cc_tariffgroup.id " .
                     " LEFT JOIN cc_country ON cc_card.country = cc_country.countrycode " .
                     " WHERE username = '" . $this->cardnumber . "'";
@@ -3526,6 +3547,7 @@ class A2Billing
         $this->voicemail            = ($result[0][23] && $result[0][24]) ? 1 : 0;
         $this->restriction          = $result[0][25];
         $this->countryprefix        = $result[0][26];
+        $this->announce_exchange    = $result[0][27];
 
         if ($this->typepaid == 1)
             $this->credit = $this->credit + $this->creditlimit;
