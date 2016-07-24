@@ -665,6 +665,57 @@ if ($mode == 'standard') {
         }
     }
 
+// Direct Speed Dial logic DSD
+} elseif ($mode == 'DSD') {
+
+    if ($A2B->agiconfig['answer_call'] == 1) {
+        $A2B->debug(INFO, $agi, __FILE__, __LINE__, '[ANSWER CALL]');
+        $agi->answer();
+    } else {
+        $A2B->debug(INFO, $agi, __FILE__, __LINE__, '[NO ANSWER CALL]');
+    }
+
+    $RateEngine->Reinit();
+    $A2B->Reinit();
+
+    $mydnid = $A2B->orig_ext;
+
+    if (strlen($mydnid) > 0 && preg_match('/^[0-9]{11,13}$/', $A2B->CallerID)) {
+        $A2B->debug(INFO, $agi, __FILE__, __LINE__, "[DID CALL - [CallerID=" . $A2B->CallerID . "]:[DID=" . $mydnid . "]");
+
+        $QUERY = "SELECT cc_did.id, cc_did_destination.id, billingtype, tariff, destination, voip_call, username, useralias, connection_charge, selling_rate, did, ".
+            " aleg_carrier_connect_charge, aleg_carrier_cost_min, aleg_retail_connect_charge, aleg_retail_cost_min, ".
+            " aleg_carrier_initblock, aleg_carrier_increment, aleg_retail_initblock, aleg_retail_increment, ".
+            " aleg_timeinterval, ".
+            " aleg_carrier_connect_charge_offp, aleg_carrier_cost_min_offp, aleg_retail_connect_charge_offp, aleg_retail_cost_min_offp, ".
+            " aleg_carrier_initblock_offp, aleg_carrier_increment_offp, aleg_retail_initblock_offp, aleg_retail_increment_offp ".
+            " FROM cc_did, cc_did_destination, cc_card, cc_callerid ".
+            " WHERE id_cc_did=cc_did.id and cc_card.status=1 and cc_card.id=cc_did_destination.id_cc_card and cc_card.id=cc_callerid.id_cc_card and cc_did_destination.activated=1 and cc_did.activated=1 and did='$mydnid' and cc_callerid.cid='".$A2B->CallerID."'".
+            " AND cc_did.startingdate<= CURRENT_TIMESTAMP AND (cc_did.expirationdate > CURRENT_TIMESTAMP OR cc_did.expirationdate IS NULL ".
+            " AND cc_did_destination.validated=1";
+
+        if ($A2B->config["database"]['dbtype'] != "postgres") {
+            // MYSQL
+            $QUERY .= " OR cc_did.expirationdate = '0000-00-00 00:00:00'";
+        }
+        $QUERY .= ") ORDER BY priority ASC";
+
+        $A2B->debug(DEBUG, $agi, __FILE__, __LINE__, $QUERY);
+        $result = $A2B->instance_table->SQLExec($A2B->DBHandle, $QUERY);
+        $A2B->debug(DEBUG, $agi, __FILE__, __LINE__, $result);
+log_info(print_r($result,1));
+        if (is_array($result)) {
+            //Off Net
+            $A2B->call_did($agi, $RateEngine, $result);
+            if ($A2B->set_inuse == 1) $A2B->callingcard_acct_start_inuse($agi, 0);
+        }
+    }
+
+    $agi->exec("Busy","3");
+    $agi->hangup();
+
+
+
 // MOVE VOUCHER TO LET CUSTOMER ONLY REFILL
 } elseif ($mode == 'voucher') {
 

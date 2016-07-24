@@ -2649,11 +2649,11 @@ class A2Billing
         $callerID_enable = $this->agiconfig['cid_enable'];
 
         // pick and store DNID data
-        if ($this->dnid_obj==false) {
+        if ($this->dnid_obj==false) { 
             $QUERY = 'SELECT * from cc_did WHERE did="'.$this->orig_dnid.'"';
-            file_put_contents('/tmp/a.log', print_r($QUERY,1), FILE_APPEND | LOCK_EX);
+            //file_put_contents('/tmp/a.log', print_r($QUERY,1), FILE_APPEND | LOCK_EX);
             $result = $this->instance_table->SQLExec($this->DBHandle, $QUERY);
-            //if (is_array($result)) {
+
             if (is_array($result) && count($result) == 1 && isset($result[0]) && is_array($result[0]) ) {
                 file_put_contents('/tmp/a.log', print_r($result,1), FILE_APPEND | LOCK_EX);
                 $this->dnid_obj=$result[0];
@@ -2674,14 +2674,17 @@ class A2Billing
                     " expiredays, nbused, UNIX_TIMESTAMP(firstusedate), UNIX_TIMESTAMP(cc_card.creationdate), cc_card.currency, " .
                     " cc_card.lastname, cc_card.firstname, cc_card.email, cc_card.uipass, cc_card.id_campaign, cc_card.id, useralias, " .
                     " cc_card.status, cc_card.voicemail_permitted, cc_card.voicemail_activated, cc_card.restriction, cc_country.countryprefix" .
-                    " FROM cc_callerid " .
-                    " LEFT JOIN cc_card ON cc_callerid.id_cc_card = cc_card.id " .
+                    " FROM cc_callerid ";
+            if (  $this->dnid_obj && isset($this->dnid_obj['id_cc_didgroup']) && $this->dnid_obj['id_cc_didgroup'] > 0 && $this->dnid_obj['reserved'] == 5 )
+                $QUERY.=" JOIN cc_did_destination ON cc_card.id = cc_did_destination.id_cc_card AND cc_did_destination.id_cc_did = ".$this->dnid_obj['id'];        
+            $QUERY.=" LEFT JOIN cc_card ON cc_callerid.id_cc_card = cc_card.id " .
                     " LEFT JOIN cc_tariffgroup ON cc_card.tariff = cc_tariffgroup.id " .
                     " LEFT JOIN cc_country ON cc_card.country = cc_country.countrycode " .
                     " WHERE cc_callerid.cid = '" . $this->CallerID . "'";
 
-            if (  $this->dnid_obj && isset($this->dnid_obj['id_cc_didgroup']) && $this->dnid_obj['id_cc_didgroup'] > 0 )
+            if (  $this->dnid_obj && isset($this->dnid_obj['id_cc_didgroup']) && $this->dnid_obj['id_cc_didgroup'] > 0 && $this->dnid_obj['reserved'] != 5 )
                 $QUERY .= " AND ( cc_callerid.id_didgroup = '".$this->dnid_obj['id_cc_didgroup']."' OR cc_callerid.id_didgroup = -1 )";
+
             $result = $this->instance_table->SQLExec($this->DBHandle, $QUERY);
             $this->debug(DEBUG, $agi, __FILE__, __LINE__, print_r($result, true));
 
