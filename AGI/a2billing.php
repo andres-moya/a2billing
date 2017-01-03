@@ -1160,6 +1160,12 @@ log_info(print_r($result,1));
         $A2B->agiconfig['use_dnid'] = 1;
         $A2B->CallerID = $called_party;
 
+    } elseif ($callback_mode == 'ACC-PROMPT') {
+        $charge_callback = 1;
+        $A2B->agiconfig['use_dnid'] = 1;
+        $A2B->agiconfig['cid_enable'] = 0;
+        $A2B->CallerID = $called_party;
+
     } elseif ($callback_mode == 'ALL') {
         $A2B->agiconfig['use_dnid'] = 0;
         $A2B->agiconfig['cid_enable'] = 0;
