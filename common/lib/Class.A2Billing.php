@@ -867,6 +867,12 @@ class A2Billing
                 $res_dtmf = $agi->get_data($prompt_enter_dest, 6000, 20);
             }
 
+            // if null, then # was pressed, lets callect what was afterwards #0 #1 #2 #3 #4 ...
+            if ($res_dtmf['result']==null) {
+                $res_dtmf2 = $agi->get_data('silence/1',1200,1);
+                $res_dtmf['result']='#'.$res_dtmf2['result'];
+            }
+
             $this->debug(DEBUG, $agi, __FILE__, __LINE__, "RES DTMF : " . $res_dtmf["result"]);
             $this->destination = $res_dtmf["result"];
         }
@@ -958,7 +964,7 @@ class A2Billing
 
             // SAY BALANCE AND FT2C PACKAGE IF APPLICABLE
             // this is hardcoded for now but we might have a setting in a2billing.conf for the combination
-            if ($this->destination == '*0') {
+            if ($this->destination == '*0' || $this->destination=='#9') {
                 $this->debug(DEBUG, $agi, __FILE__, __LINE__, "[SAY BALANCE ::> " . $this->credit . "]");
                 $this->fct_say_balance($agi, $this->credit);
 
@@ -1045,6 +1051,65 @@ class A2Billing
                 }
 
                 return -1;
+            }
+
+            // if caller id auth enabled, but users allowed to use PINs as last chance to auth,
+            // allow them to save PIN manually in addition to automatic option cid_auto_assign_card_to_cid disabled
+            if ( $this->agiconfig['cid_enable'] == 1 && $this->agiconfig['cid_askpincode_ifnot_callerid'] == 1 ) {
+                //CREATE AN INSTANCE IN CC_CALLERID
+                if ( $this->destination=='*1' || $this->destination=='#1') {
+
+                    $the_card_id=$this->id_card;
+                    $QUERY = "SELECT count(*) FROM cc_callerid WHERE id_cc_card='$the_card_id'";
+                    if ( $this->dnid_obj && isset($this->dnid_obj['id_cc_didgroup']) && $this->dnid_obj['id_cc_didgroup'] > 0 ) {
+                        $QUERY .= " AND id_didgroup = '".$this->dnid_obj['id_cc_didgroup']."'";
+                    }
+                    $result = $this->instance_table -> SQLExec ($this->DBHandle, $QUERY, 1);
+
+                    // CHECK IF THE AMOUNT OF CALLERID IS LESS THAN THE LIMIT
+                    if ($result[0][0] < $this->config["webcustomerui"]['limit_callerid']) {
+
+                        $QUERY_FIELS = 'cid, id_cc_card';
+                        $QUERY_VALUES = "'".$this->CallerID."','$the_card_id'";
+
+                        // if dnid found in cc_did and we know group, set it as well
+                        if ( $this->dnid_obj && isset($this->dnid_obj['id_cc_didgroup']) && $this->dnid_obj['id_cc_didgroup'] > 0 ) {
+                            $QUERY_FIELS .= ', id_didgroup';
+                            $QUERY_VALUES .= ",'".$this->dnid_obj['id_cc_didgroup']."'";
+                        }
+
+                        $this -> debug( DEBUG, $agi, __FILE__, __LINE__, "[CREATE AN INSTANCE IN CC_CALLERID -  QUERY_VALUES:$QUERY_VALUES, QUERY_FIELS:$QUERY_FIELS]");
+                        $result = $this->instance_table -> Add_table ($this->DBHandle, $QUERY_VALUES, $QUERY_FIELS, 'cc_callerid');
+
+                        if (!$result) {
+                            $this -> debug( DEBUG, $agi, __FILE__, __LINE__, "[CALLERID CREATION ERROR TABLE cc_callerid]");
+                        } else {
+                            $agi-> stream_file('vm-saved', '#');
+                        }
+
+
+                    } else {
+                        $this -> debug( DEBUG, $agi, __FILE__, __LINE__, "[NOT ADDING NEW CID IN CC_CALLERID : CID LIMIT]");
+                    }
+
+                    return -1;
+                }
+
+                if ( ($this->destination=='*2' || $this->destination=='#2') and strlen($this->CallerID) >=1) {
+                    $QUERY = "DELETE FROM cc_callerid WHERE cid='".$this->CallerID."' AND id_cc_card='".$this->id_card."'";
+                    if ( $this->dnid_obj && isset($this->dnid_obj['id_cc_didgroup']) && $this->dnid_obj['id_cc_didgroup'] > 0 ) {
+                         $QUERY .= " AND id_didgroup = '".$this->dnid_obj['id_cc_didgroup']."'";
+                    }
+                    $this -> debug( DEBUG, $agi, __FILE__, __LINE__, "[QUERY UPDATE : $QUERY]");
+                    $result = $this -> instance_table -> SQLExec ($this->DBHandle, $QUERY, 0);
+
+                    if (!$result) {
+                        $this -> debug( DEBUG, $agi, __FILE__, __LINE__, "[CALLERID DELETE ERROR TABLE cc_callerid]");
+                    } else {
+                        $agi-> stream_file('removed', '#');
+                        return -1;
+                    }
+                }
             }
 
             if ($this->destination <= 0) {
