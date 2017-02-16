@@ -730,7 +730,10 @@ function MDP_NUMERIC($chrs = LEN_CARDNUMBER)
 {
     $myrand = "";
     for ($i = 0; $i < $chrs; $i++) {
-        $myrand .= mt_rand(0,9);
+        if ( $i == 0)
+            $myrand .= mt_rand(1,9);
+        else
+            $myrand .= mt_rand(0,9);
     }
 
     return $myrand;
